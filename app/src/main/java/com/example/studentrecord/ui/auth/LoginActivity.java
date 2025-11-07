@@ -23,7 +23,8 @@ import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FirebaseFirestore;
 
 public class LoginActivity extends AppCompatActivity {
-
+    private FirebaseAuth auth;
+    private TextView signupRedirectText;
     private EditText etEmail, etPassword;
     private Button btnLogin;
     private TextView tvSignup;
