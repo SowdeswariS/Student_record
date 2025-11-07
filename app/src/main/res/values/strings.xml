@@ -16,4 +16,11 @@
     <string name="error_unknown_role">Unknown role: %s</string>
     <string name="error_user_profile_not_found">User profile not found in database.</string>
     <string name="error_fetch_role_failed">Failed to fetch user role: </string>
+
+    <!-- Roles array for spinner -->
+    <string-array name="roles_array">
+        <item>student</item>
+        <item>staff</item>
+        <item>admin</item>
+    </string-array>
 </resources>
