@@ -9,7 +9,6 @@ import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 
 import java.util.HashMap;
@@ -29,7 +28,7 @@ public class LoginActivity extends AppCompatActivity {
 
     private EditText etEmail, etPassword;
     private Button btnLogin;
-    private TextView tvSignup;
+    private TextView tvSignup, tvForgotPassword;
     private ProgressBar progressBar;
 
     private FirebaseAuth mAuth;
@@ -47,6 +46,7 @@ public class LoginActivity extends AppCompatActivity {
         etPassword = findViewById(R.id.etPassword);
         btnLogin = findViewById(R.id.btnLogin);
         tvSignup = findViewById(R.id.tvSignup);
+        tvForgotPassword = findViewById(R.id.tvForgotPassword);
         progressBar = findViewById(R.id.progressBar);
 
         // Firebase
@@ -56,10 +56,24 @@ public class LoginActivity extends AppCompatActivity {
         btnLogin.setOnClickListener(v -> {
             String email = etEmail.getText().toString().trim();
             String pass = etPassword.getText().toString().trim();
-            if(email.isEmpty() || pass.isEmpty()){
-                Toast.makeText(this, R.string.error_empty_credentials, Toast.LENGTH_SHORT).show();
+
+            // Validation
+            if (email.isEmpty()) {
+                etEmail.setError("Email is required");
+                etEmail.requestFocus();
                 return;
             }
+            if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
+                etEmail.setError("Please enter a valid email address");
+                etEmail.requestFocus();
+                return;
+            }
+            if (pass.isEmpty()) {
+                etPassword.setError("Password is required");
+                etPassword.requestFocus();
+                return;
+            }
+
             login(email, pass);
         });
 
@@ -67,6 +81,15 @@ public class LoginActivity extends AppCompatActivity {
             // Start your SignupActivity (if you have one)
             Intent i = new Intent(this, SignupActivity.class);
             startActivity(i);
+        });
+
+        tvForgotPassword.setOnClickListener(v -> {
+            String email = etEmail.getText().toString().trim();
+            if(email.isEmpty()){
+                Toast.makeText(this, "Please enter your email address first", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            sendPasswordResetEmail(email);
         });
     }
 
@@ -83,6 +106,12 @@ public class LoginActivity extends AppCompatActivity {
                     if(task.isSuccessful()){
                         FirebaseUser user = mAuth.getCurrentUser();
                         if(user != null){
+                            // Check if email is verified
+                            if(!user.isEmailVerified()){
+                                Toast.makeText(this, "Please verify your email before logging in. Check your inbox for the verification link.", Toast.LENGTH_LONG).show();
+                                mAuth.signOut(); // Sign out the user if email not verified
+                                return;
+                            }
                             fetchRoleAndRedirect(user.getUid());
                         }
                     } else {
@@ -143,9 +172,25 @@ public class LoginActivity extends AppCompatActivity {
                 startActivity(new Intent(this, StudentDashboardActivity.class));
                 break;
             default:
-                Toast.makeText(this, getString(R.string.error_unknown_role, role), Toast.LENGTH_LONG).show();
+                Toast.makeText(this, String.format(getString(R.string.error_unknown_role), role), Toast.LENGTH_LONG).show();
                 return;
         }
         finish();
+    }
+
+    private void sendPasswordResetEmail(String email) {
+        progressBar.setVisibility(ProgressBar.VISIBLE);
+        tvForgotPassword.setEnabled(false);
+
+        mAuth.sendPasswordResetEmail(email)
+                .addOnCompleteListener(task -> {
+                    progressBar.setVisibility(ProgressBar.GONE);
+                    tvForgotPassword.setEnabled(true);
+                    if (task.isSuccessful()) {
+                        Toast.makeText(this, "Password reset email sent. Check your inbox.", Toast.LENGTH_LONG).show();
+                    } else {
+                        Toast.makeText(this, "Failed to send password reset email: " + task.getException().getMessage(), Toast.LENGTH_LONG).show();
+                    }
+                });
     }
 }

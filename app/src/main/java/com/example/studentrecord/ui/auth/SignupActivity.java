@@ -54,15 +54,34 @@ public class SignupActivity extends AppCompatActivity {
         btnSignup.setOnClickListener(v -> {
             String email = etEmail.getText().toString().trim();
             String pass = etPassword.getText().toString().trim();
-            String role = spinnerRole.getSelectedItem().toString();
-            if (email.isEmpty() || pass.isEmpty()) {
-                Toast.makeText(this, "Enter email and password", Toast.LENGTH_SHORT).show();
+            String role = spinnerRole.getSelectedItem() != null ? spinnerRole.getSelectedItem().toString() : "";
+
+            // Validation
+            if (email.isEmpty()) {
+                etEmail.setError("Email is required");
+                etEmail.requestFocus();
+                return;
+            }
+            if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
+                etEmail.setError("Please enter a valid email address");
+                etEmail.requestFocus();
+                return;
+            }
+            if (pass.isEmpty()) {
+                etPassword.setError("Password is required");
+                etPassword.requestFocus();
                 return;
             }
             if (pass.length() < 6) {
-                Toast.makeText(this, "Password must be at least 6 characters", Toast.LENGTH_SHORT).show();
+                etPassword.setError("Password must be at least 6 characters");
+                etPassword.requestFocus();
                 return;
             }
+            if (role.isEmpty()) {
+                Toast.makeText(this, "Please select a role", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
             signup(email, pass, role);
         });
 

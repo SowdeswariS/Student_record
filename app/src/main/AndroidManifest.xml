@@ -2,6 +2,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.example.studentrecord">
 
+    <!-- Internet permission required for Firebase -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
@@ -31,18 +35,17 @@
 
         <!-- Dashboard Activities -->
         <activity
-            android:name=".ui.dashboard.AdminDashboardActivity"
-            android:exported="true" />
+            android:name=".ui.admin.AdminDashboardActivity"
+            android:exported="false" />
 
         <activity
-            android:name=".ui.dashboard.StaffDashboardActivity"
-            android:exported="true" />
+            android:name=".ui.staff.StaffDashboardActivity"
+            android:exported="false" />
 
         <activity
-            android:name=".ui.dashboard.StudentDashboardActivity"
-            android:exported="true" />
+            android:name=".ui.student.StudentDashboardActivity"
+            android:exported="false" />
 
     </application>
 
 </manifest>
-
