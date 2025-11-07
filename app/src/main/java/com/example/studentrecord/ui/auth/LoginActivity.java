@@ -4,6 +4,7 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.util.Log;
 import android.widget.Button;
+import android.widget.ProgressBar;
 import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -26,6 +27,7 @@ public class LoginActivity extends AppCompatActivity {
     private EditText etEmail, etPassword;
     private Button btnLogin;
     private TextView tvSignup;
+    private ProgressBar progressBar;
 
     private FirebaseAuth mAuth;
     private FirebaseFirestore db;
@@ -36,26 +38,13 @@ public class LoginActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_login);
-        // DEBUG: temporary sign-in tester - paste inside onCreate(), run once
-        FirebaseAuth auth = FirebaseAuth.getInstance();
-        String testEmail = "PUT_EMAIL_HERE";   // <-- replace
-        String testPass  = "PUT_PASSWORD_HERE"; // <-- replace
-
-        auth.signInWithEmailAndPassword(testEmail, testPass)
-                .addOnSuccessListener(authResult -> {
-                    String uid = authResult.getUser() != null ? authResult.getUser().getUid() : "null";
-                    Toast.makeText(this, "Auth success, uid: " + uid, Toast.LENGTH_LONG).show();
-                })
-                .addOnFailureListener(e -> {
-                    Toast.makeText(this, "Sign-in error: " + e.getClass().getSimpleName() + " - " + e.getMessage(), Toast.LENGTH_LONG).show();
-                });
-
 
         // Views
         etEmail = findViewById(R.id.etEmail);
         etPassword = findViewById(R.id.etPassword);
         btnLogin = findViewById(R.id.btnLogin);
         tvSignup = findViewById(R.id.tvSignup);
+        progressBar = findViewById(R.id.progressBar);
 
         // Firebase
         mAuth = FirebaseAuth.getInstance();
@@ -65,7 +54,7 @@ public class LoginActivity extends AppCompatActivity {
             String email = etEmail.getText().toString().trim();
             String pass = etPassword.getText().toString().trim();
             if(email.isEmpty() || pass.isEmpty()){
-                Toast.makeText(this, "Enter email and password", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, R.string.error_empty_credentials, Toast.LENGTH_SHORT).show();
                 return;
             }
             login(email, pass);
@@ -79,20 +68,24 @@ public class LoginActivity extends AppCompatActivity {
     }
 
     private void login(String email, String pass){
+        // Show progress bar and disable button
+        progressBar.setVisibility(ProgressBar.VISIBLE);
+        btnLogin.setEnabled(false);
+
         mAuth.signInWithEmailAndPassword(email, pass)
                 .addOnCompleteListener(task -> {
+                    // Hide progress bar and re-enable button
+                    progressBar.setVisibility(ProgressBar.GONE);
+                    btnLogin.setEnabled(true);
                     if(task.isSuccessful()){
                         FirebaseUser user = mAuth.getCurrentUser();
                         if(user != null){
                             fetchRoleAndRedirect(user.getUid());
-                        } else {
-                            Toast.makeText(this, "Login failed: no user", Toast.LENGTH_SHORT).show();
                         }
                     } else {
-                        Toast.makeText(this, "Auth failed: " + task.getException().getMessage(), Toast.LENGTH_LONG).show();
+                        Toast.makeText(this, getString(R.string.error_auth_failed) + task.getException().getMessage(), Toast.LENGTH_LONG).show();
                     }
-                })
-                .addOnFailureListener(e -> Toast.makeText(this, "Auth error: " + e.getMessage(), Toast.LENGTH_LONG).show());
+                });
     }
 
     private void fetchRoleAndRedirect(String uid){
@@ -102,7 +95,7 @@ public class LoginActivity extends AppCompatActivity {
                     if(doc.exists()){
                         String role = doc.getString("role");
                         if(role == null){
-                            Toast.makeText(this, "No role set for user", Toast.LENGTH_LONG).show();
+                            Toast.makeText(this, R.string.error_no_role, Toast.LENGTH_LONG).show();
                             return;
                         }
                         switch(role){
@@ -116,17 +109,17 @@ public class LoginActivity extends AppCompatActivity {
                                 startActivity(new Intent(this, StudentDashboardActivity.class));
                                 break;
                             default:
-                                Toast.makeText(this, "Unknown role: " + role, Toast.LENGTH_LONG).show();
+                                Toast.makeText(this, getString(R.string.error_unknown_role, role), Toast.LENGTH_LONG).show();
                                 return;
                         }
                         finish();
                     } else {
-                        Toast.makeText(this, "User profile not found. Create profile in Firestore users/{uid}", Toast.LENGTH_LONG).show();
+                        Toast.makeText(this, R.string.error_user_profile_not_found, Toast.LENGTH_LONG).show();
                     }
                 })
                 .addOnFailureListener((OnFailureListener) e -> {
                     Log.e(TAG, "Failed to read role", e);
-                    Toast.makeText(this, "Failed to fetch role: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                    Toast.makeText(this, getString(R.string.error_fetch_role_failed) + e.getMessage(), Toast.LENGTH_LONG).show();
                 });
     }
 }

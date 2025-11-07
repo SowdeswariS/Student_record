@@ -8,5 +8,12 @@
 
     <!-- ADD THIS: missing string referenced by activity_login.xml -->
     <string name="register_prompt">Don\'t have an account? Register here</string>
-</resources>
 
+    <!-- Login Activity Strings -->
+    <string name="error_empty_credentials">Enter email and password</string>
+    <string name="error_auth_failed">Authentication failed: </string>
+    <string name="error_no_role">No role has been set for this user.</string>
+    <string name="error_unknown_role">Unknown role: %s</string>
+    <string name="error_user_profile_not_found">User profile not found in database.</string>
+    <string name="error_fetch_role_failed">Failed to fetch user role: </string>
+</resources>
