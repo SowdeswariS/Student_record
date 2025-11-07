@@ -12,6 +12,9 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 
+import java.util.HashMap;
+import java.util.Map;
+
 import com.example.studentrecord.R;
 import com.example.studentrecord.ui.admin.AdminDashboardActivity;
 import com.example.studentrecord.ui.staff.StaffDashboardActivity;
@@ -99,28 +102,51 @@ public class LoginActivity extends AppCompatActivity {
                             Toast.makeText(this, R.string.error_no_role, Toast.LENGTH_LONG).show();
                             return;
                         }
-                        switch(role){
-                            case "admin":
-                                startActivity(new Intent(this, AdminDashboardActivity.class));
-                                break;
-                            case "staff":
-                                startActivity(new Intent(this, StaffDashboardActivity.class));
-                                break;
-                            case "student":
-                                startActivity(new Intent(this, StudentDashboardActivity.class));
-                                break;
-                            default:
-                                Toast.makeText(this, getString(R.string.error_unknown_role, role), Toast.LENGTH_LONG).show();
-                                return;
-                        }
-                        finish();
+                        redirectBasedOnRole(role);
                     } else {
-                        Toast.makeText(this, R.string.error_user_profile_not_found, Toast.LENGTH_LONG).show();
+                        // Create default profile
+                        createDefaultUserProfile(uid);
                     }
                 })
                 .addOnFailureListener((OnFailureListener) e -> {
                     Log.e(TAG, "Failed to read role", e);
                     Toast.makeText(this, getString(R.string.error_fetch_role_failed) + e.getMessage(), Toast.LENGTH_LONG).show();
                 });
+    }
+
+    private void createDefaultUserProfile(String uid) {
+        FirebaseUser user = mAuth.getCurrentUser();
+        if (user != null) {
+            Map<String, Object> userData = new HashMap<>();
+            userData.put("role", "student");
+            userData.put("email", user.getEmail());
+            db.collection("users").document(uid)
+                    .set(userData)
+                    .addOnSuccessListener(aVoid -> {
+                        Toast.makeText(this, "User profile created. Logging in as student.", Toast.LENGTH_SHORT).show();
+                        redirectBasedOnRole("student");
+                    })
+                    .addOnFailureListener(e -> {
+                        Toast.makeText(this, "Failed to create user profile: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                    });
+        }
+    }
+
+    private void redirectBasedOnRole(String role) {
+        switch(role){
+            case "admin":
+                startActivity(new Intent(this, AdminDashboardActivity.class));
+                break;
+            case "staff":
+                startActivity(new Intent(this, StaffDashboardActivity.class));
+                break;
+            case "student":
+                startActivity(new Intent(this, StudentDashboardActivity.class));
+                break;
+            default:
+                Toast.makeText(this, getString(R.string.error_unknown_role, role), Toast.LENGTH_LONG).show();
+                return;
+        }
+        finish();
     }
 }
