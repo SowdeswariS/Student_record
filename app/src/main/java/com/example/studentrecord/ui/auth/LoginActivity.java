@@ -4,149 +4,126 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.util.Log;
 import android.widget.Button;
-import android.widget.ProgressBar;
 import android.widget.EditText;
-import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 
-import java.util.HashMap;
-import java.util.Map;
-
 import com.example.studentrecord.R;
-import com.example.studentrecord.ui.admin.AdminDashboardActivity;
-import com.example.studentrecord.ui.staff.StaffDashboardActivity;
-import com.example.studentrecord.ui.student.StudentDashboardActivity;
+import com.example.studentrecord.ui.dashboard.AdminDashboardActivity;
+import com.example.studentrecord.ui.dashboard.StaffDashboardActivity;
+import com.example.studentrecord.ui.dashboard.StudentDashboardActivity;
 import com.google.android.gms.tasks.OnFailureListener;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
-import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FirebaseFirestore;
 
 public class LoginActivity extends AppCompatActivity {
-    private FirebaseAuth auth;
-    private TextView signupRedirectText;
+    private static final String TAG = "LoginActivityVerbose";
+
     private EditText etEmail, etPassword;
     private Button btnLogin;
-    private TextView tvSignup;
-    private ProgressBar progressBar;
-
     private FirebaseAuth mAuth;
     private FirebaseFirestore db;
-
-    private static final String TAG = "LoginActivity";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_login);
-
-        // Views
         etEmail = findViewById(R.id.etEmail);
         etPassword = findViewById(R.id.etPassword);
         btnLogin = findViewById(R.id.btnLogin);
-        tvSignup = findViewById(R.id.tvSignup);
-        progressBar = findViewById(R.id.progressBar);
 
-        // Firebase
         mAuth = FirebaseAuth.getInstance();
         db = FirebaseFirestore.getInstance();
 
-        btnLogin.setOnClickListener(v -> {
-            String email = etEmail.getText().toString().trim();
-            String pass = etPassword.getText().toString().trim();
-            if(email.isEmpty() || pass.isEmpty()){
-                Toast.makeText(this, R.string.error_empty_credentials, Toast.LENGTH_SHORT).show();
-                return;
-            }
-            login(email, pass);
-        });
-
-        tvSignup.setOnClickListener(v -> {
-            // Start your SignupActivity (if you have one)
-            Intent i = new Intent(this, SignupActivity.class);
-            startActivity(i);
-        });
+        btnLogin.setOnClickListener(v -> loginUser());
     }
 
-    private void login(String email, String pass){
-        // Show progress bar and disable button
-        progressBar.setVisibility(ProgressBar.VISIBLE);
+    private void loginUser() {
+        final String email = etEmail.getText() == null ? "" : etEmail.getText().toString().trim();
+        final String password = etPassword.getText() == null ? "" : etPassword.getText().toString().trim();
+
+        if (email.isEmpty() || password.isEmpty()) {
+            Toast.makeText(this, "Enter email and password", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
         btnLogin.setEnabled(false);
+        btnLogin.setText("Signing in...");
 
-        mAuth.signInWithEmailAndPassword(email, pass)
+        mAuth.signInWithEmailAndPassword(email, password)
                 .addOnCompleteListener(task -> {
-                    // Hide progress bar and re-enable button
-                    progressBar.setVisibility(ProgressBar.GONE);
-                    btnLogin.setEnabled(true);
-                    if(task.isSuccessful()){
+                    if (task.isSuccessful()) {
                         FirebaseUser user = mAuth.getCurrentUser();
-                        if(user != null){
-                            fetchRoleAndRedirect(user.getUid());
-                        }
+                        Log.d(TAG, "signIn success user=" + (user != null ? user.getUid() : "null"));
+                        Toast.makeText(this, "Auth success, uid: " + (user != null ? user.getUid() : "null"), Toast.LENGTH_LONG).show();
+                        if (user != null) fetchRoleAndRedirect(user.getUid());
+                        else resetLoginState();
                     } else {
-                        Toast.makeText(this, getString(R.string.error_auth_failed) + task.getException().getMessage(), Toast.LENGTH_LONG).show();
-                    }
-                });
-    }
-
-    private void fetchRoleAndRedirect(String uid){
-        db.collection("users").document(uid)
-                .get()
-                .addOnSuccessListener((DocumentSnapshot doc) -> {
-                    if(doc.exists()){
-                        String role = doc.getString("role");
-                        if(role == null){
-                            Toast.makeText(this, R.string.error_no_role, Toast.LENGTH_LONG).show();
-                            return;
-                        }
-                        redirectBasedOnRole(role);
-                    } else {
-                        // Create default profile
-                        createDefaultUserProfile(uid);
+                        Exception e = task.getException();
+                        String shortMsg = (e == null) ? "Auth failed (unknown)" : e.getClass().getSimpleName() + ": " + e.getMessage();
+                        Log.e(TAG, "signIn failed", e);
+                        Toast.makeText(this, "Sign-in error: " + shortMsg, Toast.LENGTH_LONG).show();
+                        resetLoginState();
                     }
                 })
-                .addOnFailureListener((OnFailureListener) e -> {
-                    Log.e(TAG, "Failed to read role", e);
-                    Toast.makeText(this, getString(R.string.error_fetch_role_failed) + e.getMessage(), Toast.LENGTH_LONG).show();
+                .addOnFailureListener(new OnFailureListener() {
+                    @Override public void onFailure(@NonNull Exception e) {
+                        Log.e(TAG, "signIn onFailure", e);
+                        Toast.makeText(LoginActivity.this, "Sign-in failure: " + e.getClass().getSimpleName() + " - " + e.getMessage(), Toast.LENGTH_LONG).show();
+                        resetLoginState();
+                    }
                 });
     }
 
-    private void createDefaultUserProfile(String uid) {
-        FirebaseUser user = mAuth.getCurrentUser();
-        if (user != null) {
-            Map<String, Object> userData = new HashMap<>();
-            userData.put("role", "student");
-            userData.put("email", user.getEmail());
-            db.collection("users").document(uid)
-                    .set(userData)
-                    .addOnSuccessListener(aVoid -> {
-                        Toast.makeText(this, "User profile created. Logging in as student.", Toast.LENGTH_SHORT).show();
-                        redirectBasedOnRole("student");
-                    })
-                    .addOnFailureListener(e -> {
-                        Toast.makeText(this, "Failed to create user profile: " + e.getMessage(), Toast.LENGTH_LONG).show();
-                    });
-        }
+    private void fetchRoleAndRedirect(String uid) {
+        db.collection("users").document(uid).get()
+                .addOnSuccessListener(doc -> {
+                    if (!doc.exists()) {
+                        Log.w(TAG, "No Firestore user doc for uid=" + uid);
+                        Toast.makeText(this, "User profile not found in Firestore. Create users/{uid} with field 'role'.", Toast.LENGTH_LONG).show();
+                        resetLoginState();
+                        return;
+                    }
+                    String role = doc.getString("role");
+                    Log.d(TAG, "Firestore role=" + role + " for uid=" + uid);
+                    if (role == null || role.trim().isEmpty()) {
+                        Toast.makeText(this, "Role not set for this user in Firestore.", Toast.LENGTH_LONG).show();
+                        resetLoginState();
+                        return;
+                    }
+                    role = role.trim().toLowerCase();
+                    switch (role) {
+                        case "admin":
+                            startActivity(new Intent(this, AdminDashboardActivity.class));
+                            finish();
+                            break;
+                        case "staff":
+                            startActivity(new Intent(this, StaffDashboardActivity.class));
+                            finish();
+                            break;
+                        case "student":
+                            startActivity(new Intent(this, StudentDashboardActivity.class));
+                            finish();
+                            break;
+                        default:
+                            Toast.makeText(this, "Unknown role: " + role, Toast.LENGTH_LONG).show();
+                            resetLoginState();
+                    }
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Failed to read user doc", e);
+                    Toast.makeText(this, "Failed to read user profile: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                    resetLoginState();
+                });
     }
 
-    private void redirectBasedOnRole(String role) {
-        switch(role){
-            case "admin":
-                startActivity(new Intent(this, AdminDashboardActivity.class));
-                break;
-            case "staff":
-                startActivity(new Intent(this, StaffDashboardActivity.class));
-                break;
-            case "student":
-                startActivity(new Intent(this, StudentDashboardActivity.class));
-                break;
-            default:
-                Toast.makeText(this, getString(R.string.error_unknown_role, role), Toast.LENGTH_LONG).show();
-                return;
-        }
-        finish();
+    private void resetLoginState() {
+        btnLogin.setEnabled(true);
+        btnLogin.setText("Login");
     }
 }
+
+
