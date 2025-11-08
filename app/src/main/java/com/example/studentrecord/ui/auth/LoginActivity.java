@@ -3,27 +3,27 @@ package com.example.studentrecord.ui.auth;
 import android.content.Intent;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.View;
 import android.widget.Button;
-import android.widget.ProgressBar;
 import android.widget.EditText;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
-
-import java.util.HashMap;
-import java.util.Map;
 
 import com.example.studentrecord.R;
 import com.example.studentrecord.ui.admin.AdminDashboardActivity;
 import com.example.studentrecord.ui.staff.StaffDashboardActivity;
 import com.example.studentrecord.ui.student.StudentDashboardActivity;
+import com.google.android.gms.tasks.OnFailureListener;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
-import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FirebaseFirestore;
 
 public class LoginActivity extends AppCompatActivity {
+    private static final String TAG = "LoginActivityVerbose";
 
     private EditText etEmail, etPassword;
     private Button btnLogin;
@@ -33,14 +33,10 @@ public class LoginActivity extends AppCompatActivity {
     private FirebaseAuth mAuth;
     private FirebaseFirestore db;
 
-    private static final String TAG = "LoginActivity";
-
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_login);
-
-        // Views
         etEmail = findViewById(R.id.etEmail);
         etPassword = findViewById(R.id.etPassword);
         btnLogin = findViewById(R.id.btnLogin);
@@ -48,7 +44,6 @@ public class LoginActivity extends AppCompatActivity {
         tvForgotPassword = findViewById(R.id.tvForgotPassword);
         progressBar = findViewById(R.id.progressBar);
 
-        // Firebase
         mAuth = FirebaseAuth.getInstance();
         db = FirebaseFirestore.getInstance();
 
@@ -92,98 +87,96 @@ public class LoginActivity extends AppCompatActivity {
         });
     }
 
-    private void login(String email, String pass){
-        // Show progress bar and disable button
-        progressBar.setVisibility(ProgressBar.VISIBLE);
+    private void login(String email, String pass) {
+        progressBar.setVisibility(View.VISIBLE);
         btnLogin.setEnabled(false);
+        btnLogin.setText("Signing in...");
 
         mAuth.signInWithEmailAndPassword(email, pass)
                 .addOnCompleteListener(task -> {
-                    // Hide progress bar and re-enable button
-                    progressBar.setVisibility(ProgressBar.GONE);
-                    btnLogin.setEnabled(true);
-                    if(task.isSuccessful()){
+                    progressBar.setVisibility(View.GONE);
+                    if (task.isSuccessful()) {
                         FirebaseUser user = mAuth.getCurrentUser();
                         if(user != null){
                             // Check if email is verified
                             if(!user.isEmailVerified()){
                                 Toast.makeText(this, "Please verify your email before logging in. Check your inbox for the verification link.", Toast.LENGTH_LONG).show();
                                 mAuth.signOut(); // Sign out the user if email not verified
+                                resetLoginState();
                                 return;
                             }
                             fetchRoleAndRedirect(user.getUid());
                         }
                     } else {
-                        Toast.makeText(this, getString(R.string.error_auth_failed) + task.getException().getMessage(), Toast.LENGTH_LONG).show();
+                        Toast.makeText(this, "Authentication failed: " + task.getException().getMessage(), Toast.LENGTH_LONG).show();
+                        resetLoginState();
+                    }
+                })
+                .addOnFailureListener(new OnFailureListener() {
+                    @Override
+                    public void onFailure(@NonNull Exception e) {
+                        Log.e(TAG, "signIn onFailure", e);
+                        Toast.makeText(LoginActivity.this, "Sign-in failure: " + e.getClass().getSimpleName() + " - " + e.getMessage(), Toast.LENGTH_LONG).show();
+                        resetLoginState();
                     }
                 });
     }
 
-    private void fetchRoleAndRedirect(String uid){
-        db.collection("users").document(uid)
-                .get()
-                .addOnSuccessListener(documentSnapshot -> {
-                    if(documentSnapshot.exists()){
-                        String role = documentSnapshot.getString("role");
-                        if(role == null){
-                            Toast.makeText(this, getString(R.string.error_no_role), Toast.LENGTH_LONG).show();
-                            return;
-                        }
-                        redirectBasedOnRole(role);
-                    } else {
-                        // Create default profile
-                        createDefaultUserProfile(uid);
+    private void fetchRoleAndRedirect(String uid) {
+        db.collection("users").document(uid).get()
+                .addOnSuccessListener(doc -> {
+                    if (!doc.exists()) {
+                        Log.w(TAG, "No Firestore user doc for uid=" + uid);
+                        Toast.makeText(this, "User profile not found in Firestore. Create users/{uid} with field 'role'.", Toast.LENGTH_LONG).show();
+                        resetLoginState();
+                        return;
+                    }
+                    String role = doc.getString("role");
+                    Log.d(TAG, "Firestore role=" + role + " for uid=" + uid);
+                    if (role == null || role.trim().isEmpty()) {
+                        Toast.makeText(this, "Role not set for this user in Firestore.", Toast.LENGTH_LONG).show();
+                        resetLoginState();
+                        return;
+                    }
+                    role = role.trim().toLowerCase();
+                    switch (role) {
+                        case "admin":
+                            startActivity(new Intent(this, AdminDashboardActivity.class));
+                            finish();
+                            break;
+                        case "staff":
+                            startActivity(new Intent(this, StaffDashboardActivity.class));
+                            finish();
+                            break;
+                        case "student":
+                            startActivity(new Intent(this, StudentDashboardActivity.class));
+                            finish();
+                            break;
+                        default:
+                            Toast.makeText(this, "Unknown role: " + role, Toast.LENGTH_LONG).show();
+                            resetLoginState();
                     }
                 })
                 .addOnFailureListener(e -> {
-                    Log.e(TAG, "Failed to read role", e);
-                    Toast.makeText(this, getString(R.string.error_fetch_role_failed) + e.getMessage(), Toast.LENGTH_LONG).show();
+                    Log.e(TAG, "Failed to read user doc", e);
+                    Toast.makeText(this, "Failed to read user profile: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                    resetLoginState();
                 });
     }
 
-    private void createDefaultUserProfile(String uid) {
-        FirebaseUser user = mAuth.getCurrentUser();
-        if (user != null) {
-            Map<String, Object> userData = new HashMap<>();
-            userData.put("role", "student");
-            userData.put("email", user.getEmail());
-            db.collection("users").document(uid)
-                    .set(userData)
-                    .addOnSuccessListener(aVoid -> {
-                        Toast.makeText(this, "User profile created. Logging in as student.", Toast.LENGTH_SHORT).show();
-                        redirectBasedOnRole("student");
-                    })
-                    .addOnFailureListener(e -> {
-                        Toast.makeText(this, "Failed to create user profile: " + e.getMessage(), Toast.LENGTH_LONG).show();
-                    });
-        }
-    }
-
-    private void redirectBasedOnRole(String role) {
-        switch(role){
-            case "admin":
-                startActivity(new Intent(this, AdminDashboardActivity.class));
-                break;
-            case "staff":
-                startActivity(new Intent(this, StaffDashboardActivity.class));
-                break;
-            case "student":
-                startActivity(new Intent(this, StudentDashboardActivity.class));
-                break;
-            default:
-                Toast.makeText(this, String.format(getString(R.string.error_unknown_role), role), Toast.LENGTH_LONG).show();
-                return;
-        }
-        finish();
+    private void resetLoginState() {
+        btnLogin.setEnabled(true);
+        btnLogin.setText("Login");
+        progressBar.setVisibility(View.GONE);
     }
 
     private void sendPasswordResetEmail(String email) {
-        progressBar.setVisibility(ProgressBar.VISIBLE);
+        progressBar.setVisibility(View.VISIBLE);
         tvForgotPassword.setEnabled(false);
 
         mAuth.sendPasswordResetEmail(email)
                 .addOnCompleteListener(task -> {
-                    progressBar.setVisibility(ProgressBar.GONE);
+                    progressBar.setVisibility(View.GONE);
                     tvForgotPassword.setEnabled(true);
                     if (task.isSuccessful()) {
                         Toast.makeText(this, "Password reset email sent. Check your inbox.", Toast.LENGTH_LONG).show();
