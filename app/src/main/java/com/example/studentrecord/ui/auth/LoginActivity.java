@@ -18,7 +18,6 @@ import com.example.studentrecord.R;
 import com.example.studentrecord.ui.admin.AdminDashboardActivity;
 import com.example.studentrecord.ui.staff.StaffDashboardActivity;
 import com.example.studentrecord.ui.student.StudentDashboardActivity;
-import com.google.android.gms.tasks.OnFailureListener;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.firestore.DocumentSnapshot;
@@ -123,11 +122,11 @@ public class LoginActivity extends AppCompatActivity {
     private void fetchRoleAndRedirect(String uid){
         db.collection("users").document(uid)
                 .get()
-                .addOnSuccessListener((DocumentSnapshot doc) -> {
-                    if(doc.exists()){
-                        String role = doc.getString("role");
+                .addOnSuccessListener(documentSnapshot -> {
+                    if(documentSnapshot.exists()){
+                        String role = documentSnapshot.getString("role");
                         if(role == null){
-                            Toast.makeText(this, R.string.error_no_role, Toast.LENGTH_LONG).show();
+                            Toast.makeText(this, getString(R.string.error_no_role), Toast.LENGTH_LONG).show();
                             return;
                         }
                         redirectBasedOnRole(role);
@@ -136,7 +135,7 @@ public class LoginActivity extends AppCompatActivity {
                         createDefaultUserProfile(uid);
                     }
                 })
-                .addOnFailureListener((OnFailureListener) e -> {
+                .addOnFailureListener(e -> {
                     Log.e(TAG, "Failed to read role", e);
                     Toast.makeText(this, getString(R.string.error_fetch_role_failed) + e.getMessage(), Toast.LENGTH_LONG).show();
                 });
