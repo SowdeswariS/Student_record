@@ -112,13 +112,10 @@ public class LoginActivity extends AppCompatActivity {
                         resetLoginState();
                     }
                 })
-                .addOnFailureListener(new OnFailureListener() {
-                    @Override
-                    public void onFailure(@NonNull Exception e) {
-                        Log.e(TAG, "signIn onFailure", e);
-                        Toast.makeText(LoginActivity.this, "Sign-in failure: " + e.getClass().getSimpleName() + " - " + e.getMessage(), Toast.LENGTH_LONG).show();
-                        resetLoginState();
-                    }
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "signIn onFailure", e);
+                    Toast.makeText(LoginActivity.this, "Sign-in failure: " + e.getClass().getSimpleName() + " - " + e.getMessage(), Toast.LENGTH_LONG).show();
+                    resetLoginState();
                 });
     }
 

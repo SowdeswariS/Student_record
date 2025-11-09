@@ -74,7 +74,7 @@
             android:layout_height="wrap_content"
             android:layout_gravity="center_horizontal"
             android:layout_marginTop="8dp"
-            android:text="Don't have an account? Sign up" />
+            android:text="@string/register_prompt" />
 
     </LinearLayout>
 

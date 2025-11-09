@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.example.studentrecord">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <!-- Internet permission required for Firebase -->
     <uses-permission android:name="android.permission.INTERNET" />
@@ -27,10 +26,6 @@
         <!-- Signup and Main Activities -->
         <activity
             android:name=".ui.auth.SignupActivity"
-            android:exported="false" />
-
-        <activity
-            android:name=".MainActivity"
             android:exported="false" />
 
         <!-- Dashboard Activities -->
