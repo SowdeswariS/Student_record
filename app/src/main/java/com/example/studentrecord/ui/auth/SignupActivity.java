@@ -2,6 +2,7 @@ package com.example.studentrecord.ui.auth;
 
 import android.content.Intent;
 import android.os.Bundle;
+import android.util.Log;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
@@ -13,22 +14,25 @@ import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.example.studentrecord.R;
-import com.google.firebase.auth.FirebaseAuth;
-import com.google.firebase.firestore.FirebaseFirestore;
+import com.example.studentrecord.util.SupabaseConfig;
+
+import io.github.jan.supabase.auth.exception.AuthRestException;
+import io.github.jan.supabase.auth.user.User;
+import io.github.jan.supabase.postgrest.from;
+
+import org.json.JSONObject;
 
 import java.util.HashMap;
 import java.util.Map;
 
 public class SignupActivity extends AppCompatActivity {
+    private static final String TAG = "SignupActivity";
 
     private EditText etEmail, etPassword;
     private Spinner spinnerRole;
     private Button btnSignup;
     private TextView tvLogin;
     private ProgressBar progressBar;
-
-    private FirebaseAuth mAuth;
-    private FirebaseFirestore db;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -41,9 +45,6 @@ public class SignupActivity extends AppCompatActivity {
         btnSignup = findViewById(R.id.btnSignup);
         tvLogin = findViewById(R.id.tvLogin);
         progressBar = findViewById(R.id.progressBar);
-
-        mAuth = FirebaseAuth.getInstance();
-        db = FirebaseFirestore.getInstance();
 
         // Set up spinner
         ArrayAdapter<CharSequence> adapter = ArrayAdapter.createFromResource(this,
@@ -96,46 +97,68 @@ public class SignupActivity extends AppCompatActivity {
         progressBar.setVisibility(ProgressBar.VISIBLE);
         btnSignup.setEnabled(false);
 
-        mAuth.createUserWithEmailAndPassword(email, pass)
-                .addOnCompleteListener(task -> {
-                    if (task.isSuccessful()) {
-                        String uid = mAuth.getCurrentUser().getUid();
-                        Map<String, Object> user = new HashMap<>();
-                        user.put("role", role);
-                        user.put("email", email);
+        // Use Supabase authentication
+        SupabaseConfig.getAuth().signUpWith(email, pass)
+            .onSuccess(result -> {
+                User user = SupabaseConfig.getAuth().getCurrentUser();
+                if (user != null) {
+                    // Save user data to Supabase database
+                    saveUserToDatabase(user.getId(), email, role);
+                } else {
+                    Toast.makeText(this, "Signup failed: User not created", Toast.LENGTH_LONG).show();
+                    resetSignupState();
+                }
+            })
+            .onFailure(exception -> {
+                Log.e(TAG, "Signup failed", exception);
+                String errorMessage = "Signup failed";
+                if (exception instanceof AuthRestException) {
+                    errorMessage = ((AuthRestException) exception).getErrorDescription();
+                }
+                Toast.makeText(this, errorMessage, Toast.LENGTH_LONG).show();
+                resetSignupState();
+            });
+    }
 
-                        db.collection("users").document(uid)
-                                .set(user)
-                                .addOnSuccessListener(aVoid -> {
-                                    // Send email verification
-                                    mAuth.getCurrentUser().sendEmailVerification()
-                                            .addOnCompleteListener(verifyTask -> {
-                                                progressBar.setVisibility(ProgressBar.GONE);
-                                                btnSignup.setEnabled(true);
-                                                if (verifyTask.isSuccessful()) {
-                                                    Toast.makeText(this, "Account created. Please verify your email.", Toast.LENGTH_LONG).show();
-                                                } else {
-                                                    Toast.makeText(this, "Account created but failed to send verification email.", Toast.LENGTH_LONG).show();
-                                                }
-                                                // Redirect to login
-                                                Intent i = new Intent(this, LoginActivity.class);
-                                                startActivity(i);
-                                                finish();
-                                            });
-                                })
-                                .addOnFailureListener(e -> {
-                                    progressBar.setVisibility(ProgressBar.GONE);
-                                    btnSignup.setEnabled(true);
-                                    Toast.makeText(this, "Failed to save user data: " + e.getMessage(), Toast.LENGTH_LONG).show();
-                                });
-                    } else {
+    private void saveUserToDatabase(String uid, String email, String role) {
+        // Create user data map
+        Map<String, Object> userData = new HashMap<>();
+        userData.put("id", uid);
+        userData.put("email", email);
+        userData.put("role", role.toLowerCase());
+        userData.put("created_at", System.currentTimeMillis());
+
+        // Save to Supabase users table
+        SupabaseConfig.getPostgrest().from("users")
+            .insert(userData)
+            .onSuccess(result -> {
+                // Send email verification
+                SupabaseConfig.getAuth().sendEmailVerification()
+                    .onSuccess(verifyResult -> {
+                        Toast.makeText(this, "Account created. Please verify your email.", Toast.LENGTH_LONG).show();
+                    })
+                    .onFailure(verifyException -> {
+                        Log.w(TAG, "Failed to send verification email", verifyException);
+                        Toast.makeText(this, "Account created but failed to send verification email.", Toast.LENGTH_LONG).show();
+                    })
+                    .onFinally(() -> {
+                        // Redirect to login
                         progressBar.setVisibility(ProgressBar.GONE);
                         btnSignup.setEnabled(true);
-                        Toast.makeText(this, "Signup failed: " + task.getException().getMessage(), Toast.LENGTH_LONG).show();
-                    }
-                });
+                        Intent i = new Intent(this, LoginActivity.class);
+                        startActivity(i);
+                        finish();
+                    });
+            })
+            .onFailure(exception -> {
+                Log.e(TAG, "Failed to save user data", exception);
+                Toast.makeText(this, "Failed to save user data: " + exception.getMessage(), Toast.LENGTH_LONG).show();
+                resetSignupState();
+            });
+    }
+
+    private void resetSignupState() {
+        progressBar.setVisibility(ProgressBar.GONE);
+        btnSignup.setEnabled(true);
     }
 }
-
-
-

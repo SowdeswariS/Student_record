@@ -10,42 +10,41 @@ import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.example.studentrecord.R;
 import com.example.studentrecord.ui.admin.AdminDashboardActivity;
 import com.example.studentrecord.ui.staff.StaffDashboardActivity;
 import com.example.studentrecord.ui.student.StudentDashboardActivity;
-import com.google.android.gms.tasks.OnFailureListener;
-import com.google.firebase.auth.FirebaseAuth;
-import com.google.firebase.auth.FirebaseUser;
-import com.google.firebase.firestore.FirebaseFirestore;
+import com.example.studentrecord.util.SupabaseConfig;
+
+import io.github.jan.supabase.auth.exception.AuthRestException;
+import io.github.jan.supabase.auth.user.User;
+import io.github.jan.supabase.postgrest.from;
+import io.github.jan.supabase.postgrest.result.PostgrestResult;
+
+import kotlinx.coroutines.flow.Flow;
+import kotlinx.coroutines.flow.FlowCollector;
 
 public class LoginActivity extends AppCompatActivity {
-    private static final String TAG = "LoginActivityVerbose";
+    private static final String TAG = "LoginActivity";
 
     private EditText etEmail, etPassword;
     private Button btnLogin;
     private TextView tvSignup, tvForgotPassword;
     private ProgressBar progressBar;
 
-    private FirebaseAuth mAuth;
-    private FirebaseFirestore db;
-
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_login);
+        
         etEmail = findViewById(R.id.etEmail);
         etPassword = findViewById(R.id.etPassword);
         btnLogin = findViewById(R.id.btnLogin);
         tvSignup = findViewById(R.id.tvSignup);
         tvForgotPassword = findViewById(R.id.tvForgotPassword);
         progressBar = findViewById(R.id.progressBar);
-
-        mAuth = FirebaseAuth.getInstance();
-        db = FirebaseFirestore.getInstance();
 
         btnLogin.setOnClickListener(v -> {
             String email = etEmail.getText().toString().trim();
@@ -72,7 +71,6 @@ public class LoginActivity extends AppCompatActivity {
         });
 
         tvSignup.setOnClickListener(v -> {
-            // Start your SignupActivity (if you have one)
             Intent i = new Intent(this, SignupActivity.class);
             startActivity(i);
         });
@@ -92,49 +90,51 @@ public class LoginActivity extends AppCompatActivity {
         btnLogin.setEnabled(false);
         btnLogin.setText("Signing in...");
 
-        mAuth.signInWithEmailAndPassword(email, pass)
-                .addOnCompleteListener(task -> {
-                    progressBar.setVisibility(View.GONE);
-                    if (task.isSuccessful()) {
-                        FirebaseUser user = mAuth.getCurrentUser();
-                        if(user != null){
-                            // Check if email is verified
-                            if(!user.isEmailVerified()){
-                                Toast.makeText(this, "Please verify your email before logging in. Check your inbox for the verification link.", Toast.LENGTH_LONG).show();
-                                mAuth.signOut(); // Sign out the user if email not verified
-                                resetLoginState();
-                                return;
-                            }
-                            fetchRoleAndRedirect(user.getUid());
-                        }
-                    } else {
-                        Toast.makeText(this, "Authentication failed: " + task.getException().getMessage(), Toast.LENGTH_LONG).show();
+        // Use Supabase authentication
+        SupabaseConfig.getAuth().signInWith(email, pass)
+            .onSuccess(result -> {
+                User user = SupabaseConfig.getAuth().getCurrentUser();
+                if (user != null) {
+                    // Check if email is confirmed
+                    if (!user.isEmailConfirmed()) {
+                        Toast.makeText(this, "Please verify your email before logging in. Check your inbox for the verification link.", Toast.LENGTH_LONG).show();
+                        SupabaseConfig.getAuth().signOut();
                         resetLoginState();
+                        return;
                     }
-                })
-                .addOnFailureListener(e -> {
-                    Log.e(TAG, "signIn onFailure", e);
-                    Toast.makeText(LoginActivity.this, "Sign-in failure: " + e.getClass().getSimpleName() + " - " + e.getMessage(), Toast.LENGTH_LONG).show();
+                    fetchRoleAndRedirect(user.getId());
+                } else {
+                    Toast.makeText(this, "Login failed: User not found", Toast.LENGTH_LONG).show();
                     resetLoginState();
-                });
+                }
+            })
+            .onFailure(exception -> {
+                Log.e(TAG, "Login failed", exception);
+                String errorMessage = "Authentication failed";
+                if (exception instanceof AuthRestException) {
+                    errorMessage = ((AuthRestException) exception).getErrorDescription();
+                }
+                Toast.makeText(this, errorMessage, Toast.LENGTH_LONG).show();
+                resetLoginState();
+            });
     }
 
     private void fetchRoleAndRedirect(String uid) {
-        db.collection("users").document(uid).get()
-                .addOnSuccessListener(doc -> {
-                    if (!doc.exists()) {
-                        Log.w(TAG, "No Firestore user doc for uid=" + uid);
-                        Toast.makeText(this, "User profile not found in Firestore. Create users/{uid} with field 'role'.", Toast.LENGTH_LONG).show();
-                        resetLoginState();
-                        return;
-                    }
-                    String role = doc.getString("role");
-                    Log.d(TAG, "Firestore role=" + role + " for uid=" + uid);
+        SupabaseConfig.getPostgrest().from("users")
+            .select("role")
+            .eq("id", uid)
+            .single()
+            .onSuccess(result -> {
+                try {
+                    String role = result.getData().getString("role");
+                    Log.d(TAG, "Supabase role=" + role + " for uid=" + uid);
+                    
                     if (role == null || role.trim().isEmpty()) {
-                        Toast.makeText(this, "Role not set for this user in Firestore.", Toast.LENGTH_LONG).show();
+                        Toast.makeText(this, "Role not set for this user.", Toast.LENGTH_LONG).show();
                         resetLoginState();
                         return;
                     }
+                    
                     role = role.trim().toLowerCase();
                     switch (role) {
                         case "admin":
@@ -153,12 +153,17 @@ public class LoginActivity extends AppCompatActivity {
                             Toast.makeText(this, "Unknown role: " + role, Toast.LENGTH_LONG).show();
                             resetLoginState();
                     }
-                })
-                .addOnFailureListener(e -> {
-                    Log.e(TAG, "Failed to read user doc", e);
-                    Toast.makeText(this, "Failed to read user profile: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                } catch (Exception e) {
+                    Log.e(TAG, "Error parsing role", e);
+                    Toast.makeText(this, "Error parsing user role", Toast.LENGTH_LONG).show();
                     resetLoginState();
-                });
+                }
+            })
+            .onFailure(exception -> {
+                Log.e(TAG, "Failed to read user doc", exception);
+                Toast.makeText(this, "Failed to read user profile: " + exception.getMessage(), Toast.LENGTH_LONG).show();
+                resetLoginState();
+            });
     }
 
     private void resetLoginState() {
@@ -171,15 +176,20 @@ public class LoginActivity extends AppCompatActivity {
         progressBar.setVisibility(View.VISIBLE);
         tvForgotPassword.setEnabled(false);
 
-        mAuth.sendPasswordResetEmail(email)
-                .addOnCompleteListener(task -> {
-                    progressBar.setVisibility(View.GONE);
-                    tvForgotPassword.setEnabled(true);
-                    if (task.isSuccessful()) {
-                        Toast.makeText(this, "Password reset email sent. Check your inbox.", Toast.LENGTH_LONG).show();
-                    } else {
-                        Toast.makeText(this, "Failed to send password reset email: " + task.getException().getMessage(), Toast.LENGTH_LONG).show();
-                    }
-                });
+        SupabaseConfig.getAuth().resetPasswordForEmail(email)
+            .onSuccess(result -> {
+                Toast.makeText(this, "Password reset email sent. Check your inbox.", Toast.LENGTH_LONG).show();
+            })
+            .onFailure(exception -> {
+                String errorMessage = "Failed to send password reset email";
+                if (exception instanceof AuthRestException) {
+                    errorMessage = ((AuthRestException) exception).getErrorDescription();
+                }
+                Toast.makeText(this, errorMessage, Toast.LENGTH_LONG).show();
+            })
+            .onFinally(() -> {
+                progressBar.setVisibility(View.GONE);
+                tvForgotPassword.setEnabled(true);
+            });
     }
 }

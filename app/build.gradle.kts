@@ -1,6 +1,6 @@
 plugins {
     id("com.android.application")
-    id("com.google.gms.google-services")
+    id("io.github.jan.supabase") version "2.2.0"
 }
 
 android {
@@ -32,15 +32,12 @@ android {
 }
 
 dependencies {
-    // Firebase BOM
-    implementation(platform("com.google.firebase:firebase-bom:33.5.1"))
-
-    // Firebase SDKs
-    implementation("com.google.firebase:firebase-auth")
-    implementation("com.google.firebase:firebase-firestore")
-    implementation("com.google.firebase:firebase-storage")
-    implementation("com.google.firebase:firebase-analytics")
-    implementation("com.google.firebase:firebase-database")
+    // Supabase
+    implementation("io.github.jan.supabase:supabase-android:2.2.0")
+    implementation("io.github.jan.supabase:postgrest-kt:2.2.0")
+    implementation("io.github.jan.supabase:auth-kt:2.2.0")
+    implementation("io.github.jan.supabase:storage-kt:2.2.0")
+    implementation("io.github.jan.supabase:realtime-kt:2.2.0")
 
     // AndroidX + Material
     implementation("androidx.core:core-ktx:1.12.0")
