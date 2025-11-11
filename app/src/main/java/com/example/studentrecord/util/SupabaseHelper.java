@@ -129,7 +129,7 @@ public class SupabaseHelper {
     public static void getAllNotices() {
         SupabaseConfig.getPostgrest().from("notices")
             .select("*")
-            .order("created_at", descending = true)
+            .order("created_at", true)
             .onSuccess(result -> {
                 Log.d(TAG, "Notices retrieved successfully");
             })
@@ -163,7 +163,7 @@ public class SupabaseHelper {
         SupabaseConfig.getPostgrest().from("submissions")
             .select("*")
             .eq("student_id", studentId)
-            .order("created_at", descending = true)
+            .order("created_at", true)
             .onSuccess(result -> {
                 Log.d(TAG, "Student submissions retrieved successfully");
             })
@@ -195,15 +195,15 @@ public class SupabaseHelper {
     // Real-time helpers
     public static void subscribeToTable(String tableName) {
         SupabaseConfig.getRealtime().channel(tableName)
-            .onPostgresChange("INSERT", tableName) { payload ->
+            .onPostgresChange("INSERT", tableName, payload -> {
                 Log.d(TAG, "New record in " + tableName + ": " + payload);
-            }
-            .onPostgresChange("UPDATE", tableName) { payload ->
+            })
+            .onPostgresChange("UPDATE", tableName, payload -> {
                 Log.d(TAG, "Updated record in " + tableName + ": " + payload);
-            }
-            .onPostgresChange("DELETE", tableName) { payload ->
+            })
+            .onPostgresChange("DELETE", tableName, payload -> {
                 Log.d(TAG, "Deleted record in " + tableName + ": " + payload);
-            }
+            })
             .subscribe();
     }
 }

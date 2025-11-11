@@ -21,30 +21,29 @@ public class SupabaseConfig {
         if (supabaseClient == null) {
             supabaseClient = createSupabaseClient(
                 SUPABASE_URL,
-                SUPABASE_ANON_KEY
-            ) {
-                install(Auth)
-                install(Postgrest)
-                install(Storage)
-                install(Realtime)
-            }
+                SUPABASE_ANON_KEY,
+                new Auth(), 
+                new Postgrest(), 
+                new Storage(), 
+                new Realtime()
+            );
         }
         return supabaseClient;
     }
     
     public static Auth getAuth() {
-        return getClient().auth;
+        return getClient().getAuth();
     }
     
     public static Postgrest getPostgrest() {
-        return getClient().postgrest;
+        return getClient().getPostgrest();
     }
     
     public static Storage getStorage() {
-        return getClient().storage;
+        return getClient().getStorage();
     }
     
     public static Realtime getRealtime() {
-        return getClient().realtime;
+        return getClient().getRealtime();
     }
 }
